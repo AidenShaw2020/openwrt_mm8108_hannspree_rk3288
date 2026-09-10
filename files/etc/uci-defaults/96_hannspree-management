@@ -1,0 +1,9 @@
+#!/bin/sh
+# Hannspree: make first boot reachable over Ethernet for initial setup.
+# Override the generic Morse defaults that disable Dropbear and redirect HTTP.
+uci -q set dropbear.@dropbear[0].enable='1'
+uci -q set uhttpd.main.redirect_https='0'
+uci -q set uhttpd.main.ubus_prefix='/ubus'
+uci -q commit dropbear
+uci -q commit uhttpd
+exit 0

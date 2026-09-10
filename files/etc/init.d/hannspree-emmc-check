@@ -1,0 +1,39 @@
+#!/bin/sh /etc/rc.common
+START=95
+
+boot() {
+    grep -qw 'hannspree_emmc_check=1' /proc/cmdline || return 0
+    (
+        for delay in 5 20 40 60; do
+            sleep "$delay"
+            echo "HANNSPREE-CHECK uptime=$(cut -d' ' -f1 /proc/uptime)"
+            found=0
+            for dev in /sys/class/block/mmcblk[0-9]*; do
+                [ -f "$dev/device/name" ] || continue
+                [ "$(cat "$dev/device/name")" = 8GME4R ] || continue
+                case "$(readlink -f "$dev/device")" in
+                    *ff0f0000*) ;;
+                    *) continue ;;
+                esac
+                found=1
+                block="/dev/${dev##*/}"
+                if dd if="$block" of=/dev/null bs=4096 count=256 2>/dev/null; then
+                    echo "HANNSPREE-CHECK eMMC $block 8GME4R READ_1MiB_OK"
+                else
+                    echo "HANNSPREE-CHECK eMMC $block READ_FAILED"
+                fi
+            done
+            [ "$found" = 1 ] || echo 'HANNSPREE-CHECK EMMC_MISSING'
+        done
+        echo 'HANNSPREE-CHECK USB devices:'
+        for dev in /sys/bus/usb/devices/*; do
+            [ -f "$dev/idVendor" ] || continue
+            echo "USB ${dev##*/} $(cat "$dev/idVendor"):$(cat "$dev/idProduct") $(cat "$dev/product" 2>/dev/null)"
+        done
+        echo 'HANNSPREE-CHECK network:'
+        ip -4 addr show
+        echo 'HANNSPREE-CHECK wireless:'
+        iw dev
+        echo 'HANNSPREE-CHECK DONE'
+    ) > /dev/console 2>&1 &
+}

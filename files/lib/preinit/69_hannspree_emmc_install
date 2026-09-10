@@ -1,0 +1,14 @@
+hannspree_emmc_install_preinit() {
+    grep -qw 'hannspree_emmc_install=YES' /proc/cmdline || return 0
+
+    echo "[HANNSPREE-INSTALL] PREINIT hook aktivni" > /dev/console
+    /root/install-hannspree-emmc.sh >/dev/console 2>&1
+    rc=$?
+
+    # Uspesny installer rebootuje a sem se nevrati. Pri chybe nepokracuj do
+    # normalniho OpenWrt, aby se nic dalsiho eMMC nedotykalo.
+    echo "[HANNSPREE-INSTALL] Installer skoncil rc=$rc; system zastavuji." > /dev/console
+    while true; do sleep 3600; done
+}
+
+boot_hook_add initramfs hannspree_emmc_install_preinit

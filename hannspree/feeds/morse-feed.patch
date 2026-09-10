@@ -1,0 +1,35 @@
+diff --git a/essentials/morse_driver/Makefile b/essentials/morse_driver/Makefile
+index 865ba2e..8c4a5fe 100644
+--- a/essentials/morse_driver/Makefile
++++ b/essentials/morse_driver/Makefile
+@@ -26,12 +26,12 @@ define KernelPackage/morse
+   CATEGORY:=Morse Micro
+   SUBMENU:=Essentials
+   TITLE:=Morse Micro Wi-Fi HaLow driver for MM61x
+-  DEPENDS:= +kmod-mmc +!MORSE_CUSTOM_MAC80211:kmod-mac80211 +kmod-trelay +kmod-lib-crc7 morse-fw +morse-board-config +MORSE_USB:kmod-usb-core
++  DEPENDS:= +!MORSE_CUSTOM_MAC80211:kmod-mac80211 +kmod-trelay +kmod-lib-crc7 morse-fw +morse-board-config +MORSE_USB:kmod-usb-core
+   FILES:=\
+     $(PKG_BUILD_DIR)/morse.ko \
+     $(PKG_BUILD_DIR)/dot11ah/dot11ah.ko
+   AUTOLOAD:=$(call AutoProbe,morse)
+-  MODPARAMS.morse:=country=US
++  MODPARAMS.morse:=country=CZ
+   PROVIDES:=kmod-morse
+ endef
+ 
+diff --git a/hardware/morse-bundle/files/morse/scripts/morse-wireless-defaults b/hardware/morse-bundle/files/morse/scripts/morse-wireless-defaults
+index 360c083..f7acd6b 100755
+--- a/hardware/morse-bundle/files/morse/scripts/morse-wireless-defaults
++++ b/hardware/morse-bundle/files/morse/scripts/morse-wireless-defaults
+@@ -18,7 +18,10 @@ LOGTAG="morse-wireless-defaults"
+ default_ssid=$(uci get system.@system[0].hostname 2>/dev/null)
+ default_wifi_key="$(persistent_vars_storage.sh READ default_wifi_key)"
+ if [ -z "$default_wifi_key" ]; then
+-	default_wifi_key=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 8)
++	# Consume a fixed-size random block before filtering. The old tr|head
++	# pipeline made tr report SIGPIPE as "Broken pipe" on BusyBox.
++	default_wifi_key=$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n\r\t' | cut -c1-8)
++	[ "${#default_wifi_key}" -eq 8 ] || default_wifi_key=MM8108CZ
+ fi
+ uci set "system.@system[0].default_wifi_key=$default_wifi_key"
+ mm_region="$(persistent_vars_storage.sh READ mm_region)"

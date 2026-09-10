@@ -1,0 +1,11 @@
+--- a/drivers/mmc/host/dw_mmc.c
++++ b/drivers/mmc/host/dw_mmc.c
+@@ -1234,7 +1234,7 @@
+ 			force_clkinit) {
+ 			/* Silent the verbose log if calling from PM context */
+ 			if (!force_clkinit)
+-				dev_info(&slot->mmc->class_dev,
++				dev_dbg(&slot->mmc->class_dev,
+ 					 "Bus speed (slot %d) = %dHz (slot req %dHz, actual %dHZ div = %d)\n",
+ 					 slot->id, host->bus_hz, clock,
+ 					 div ? ((host->bus_hz / div) >> 1) :

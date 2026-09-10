@@ -257,6 +257,9 @@ sub cleanup
 
 @mirrors = localmirrors();
 
+# Hannspree build: prefer OpenWrt source cache first
+projectsmirrors '@OPENWRT';
+
 foreach my $mirror (@ARGV) {
 	if ($mirror =~ /^\@SF\/(.+)$/) {
 		# give sourceforge a few more tries, because it redirects to different mirrors

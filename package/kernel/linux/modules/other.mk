@@ -437,20 +437,16 @@ $(eval $(call KernelPackage,lp))
 
 define KernelPackage/mmc
   SUBMENU:=$(OTHER_MENU)
-  TITLE:=MMC/SD Card Support
+  TITLE:=MMC/SD Card Support (built-in on Hannspree RK3288)
   DEPENDS:=@!TARGET_uml
   KCONFIG:= \
-	CONFIG_MMC \
-	CONFIG_MMC_BLOCK \
+	CONFIG_MMC=y \
+	CONFIG_MMC_BLOCK=y \
 	CONFIG_MMC_DEBUG=n \
 	CONFIG_MMC_UNSAFE_RESUME=n \
 	CONFIG_MMC_TIFM_SD=n \
 	CONFIG_MMC_WBSD=n \
 	CONFIG_SDIO_UART=n
-  FILES:= \
-	$(LINUX_DIR)/drivers/mmc/core/mmc_core.ko \
-	$(LINUX_DIR)/drivers/mmc/core/mmc_block.ko
-  AUTOLOAD:=$(call AutoProbe,mmc_core mmc_block,1)
 endef
 
 define KernelPackage/mmc/description

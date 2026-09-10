@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 BOARD:=armsr
 BOARDNAME:=Arm SystemReady (EFI) compliant
-FEATURES:=fpu pci pcie rtc usb boot-part rootfs-part
+FEATURES:=fpu pci pcie rtc usb usbgadget boot-part rootfs-part
 FEATURES+=cpiogz ext4 ramdisk squashfs targz vmdk
 
 KERNEL_PATCHVER:=6.6
