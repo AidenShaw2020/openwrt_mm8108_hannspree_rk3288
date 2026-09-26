@@ -55,7 +55,6 @@ hannspree_validate_sysupgrade() {
 	size="$(hannspree_control_value ROOT_SIZE)"
 	case "$size" in ''|*[!0-9]*) return 1 ;; esac
 	[ "$size" -gt 16777216 ] || return 1
-	[ "$(tar xOf "$image" "$dir/root" | wc -c)" -eq "$size" ] || return 1
 
 	for file in kernel root dtb boot.scr; do
 		case "$file" in
@@ -66,6 +65,21 @@ hannspree_validate_sysupgrade() {
 		esac
 		hash="$(hannspree_control_value "$key")"
 		hannspree_valid_hash "$hash" || return 1
+	done
+}
+
+hannspree_validate_payloads() {
+	local image="$1" dir=sysupgrade-hannspree-rk3288 file hash key
+
+	hannspree_validate_sysupgrade "$image" || return 1
+	for file in kernel dtb boot.scr root; do
+		case "$file" in
+			kernel) key=KERNEL_SHA256 ;;
+			root) key=ROOT_SHA256 ;;
+			dtb) key=DTB_SHA256 ;;
+			boot.scr) key=BOOT_SCR_SHA256 ;;
+		esac
+		hash="$(hannspree_control_value "$key")"
 		[ "$(tar xOf "$image" "$dir/$file" | /bin/busybox sha256sum | awk '{print $1}')" = "$hash" ] || {
 			v "Checksum failed for $file"
 			return 1
@@ -77,7 +91,7 @@ hannspree_do_upgrade() {
 	local image="$1" dir=sysupgrade-hannspree-rk3288 part disk sysdisk
 	local root_size root_hash part_size disk_size part_start actual rc mountpoint root_spec partuuid arg
 
-	hannspree_validate_sysupgrade "$image" || return 1
+	hannspree_validate_payloads "$image" || return 1
 	part="$(hannspree_find_emmc_partition)" || {
 		v "Unable to identify the Hannspree eMMC root partition"
 		return 1

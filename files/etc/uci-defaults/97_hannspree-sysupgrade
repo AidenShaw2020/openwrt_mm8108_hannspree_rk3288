@@ -1,0 +1,6 @@
+#!/bin/sh
+# Custom Hannspree images cannot carry a Morse Micro production signature.
+# Payload integrity and target compatibility are verified by platform.sh.
+uci -q set system.@system[0].enforce_fw_sign='0'
+uci -q commit system
+exit 0

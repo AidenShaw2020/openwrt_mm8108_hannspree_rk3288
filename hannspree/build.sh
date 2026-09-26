@@ -13,6 +13,7 @@ make defconfig
 grep -qx 'CONFIG_PACKAGE_kmod-morse=y' .config
 grep -qx 'CONFIG_PACKAGE_luci-app-ekhwizards=y' .config
 grep -qx 'CONFIG_PACKAGE_morse-bcf-info=y' .config
+! grep -qx 'CONFIG_PACKAGE_morse-firmware-sign=y' .config
 grep -Eq '^[[:space:]]*MODPARAMS\.morse:=country=EU$' \
 	feeds/morse/essentials/morse_driver/Makefile
 grep -qx 'EU' files/etc/morse-persistent-vars/mm_region
@@ -34,12 +35,16 @@ DTC=${DTC:-$TOPDIR/staging_dir/host/bin/dtc}
 [ -x "$DTC" ] || DTC=$(command -v dtc || true)
 MKIMAGE=${MKIMAGE:-$TOPDIR/staging_dir/host/bin/mkimage}
 [ -x "$MKIMAGE" ] || MKIMAGE=$(command -v mkimage || true)
+FWTOOL=${FWTOOL:-$TOPDIR/staging_dir/host/bin/fwtool}
+[ -x "$FWTOOL" ] || FWTOOL=$(command -v fwtool || true)
 FDTGET=${FDTGET:-$(command -v fdtget || true)}
 READELF=${READELF:-$(command -v readelf || true)}
 test -n "$DTC"
 test -x "$DTC"
 test -n "$MKIMAGE"
 test -x "$MKIMAGE"
+test -n "$FWTOOL"
+test -x "$FWTOOL"
 test -n "$FDTGET"
 test -x "$FDTGET"
 test -n "$READELF"
@@ -79,12 +84,48 @@ ROOT_SHA256=$(sha256sum "$SYSUPGRADE_DIR/root" | awk '{print $1}')
 DTB_SHA256=$(sha256sum "$SYSUPGRADE_DIR/dtb" | awk '{print $1}')
 BOOT_SCR_SHA256=$(sha256sum "$SYSUPGRADE_DIR/boot.scr" | awk '{print $1}')
 EOF
-tar -C "$STAGE" -cf "$STAGE/$SYSUPGRADE_NAME" sysupgrade-hannspree-rk3288
+tar -C "$STAGE" -cf "$STAGE/$SYSUPGRADE_NAME" \
+	"sysupgrade-hannspree-rk3288/CONTROL" \
+	"sysupgrade-hannspree-rk3288/kernel" \
+	"sysupgrade-hannspree-rk3288/dtb" \
+	"sysupgrade-hannspree-rk3288/boot.scr" \
+	"sysupgrade-hannspree-rk3288/root"
+cat > "$STAGE/sysupgrade-metadata.json" <<EOF
+{
+  "metadata_version": "1.1",
+  "compat_version": "1.0",
+  "supported_devices": ["firefly,firefly-rk3288-reload", "hannspree,s-x20"],
+  "version": {
+    "dist": "OpenWrt",
+    "version": "24.10.5-morse-3.1.1",
+    "revision": "$HANNSPREE_VERSION",
+    "target": "armsr/armv7",
+    "board": "hannspree-rk3288-mm8108"
+  }
+}
+EOF
+"$FWTOOL" -I "$STAGE/sysupgrade-metadata.json" "$STAGE/$SYSUPGRADE_NAME"
+rm "$STAGE/sysupgrade-metadata.json"
 for file in CONTROL kernel root dtb boot.scr; do
 	tar tf "$STAGE/$SYSUPGRADE_NAME" "sysupgrade-hannspree-rk3288/$file" >/dev/null
 done
 cp target/linux/armsr/base-files/lib/upgrade/platform.sh "$STAGE/hannspree-platform.sh"
 rm -rf "$SYSUPGRADE_DIR"
+
+BOOTSTRAP_DIR="$STAGE/hannspree-sysupgrade-bootstrap"
+rm -rf "$BOOTSTRAP_DIR"
+mkdir -p "$BOOTSTRAP_DIR/etc/uci-defaults" "$BOOTSTRAP_DIR/lib/upgrade"
+cp files/etc/uci-defaults/97_hannspree-sysupgrade \
+	"$BOOTSTRAP_DIR/etc/uci-defaults/97_hannspree-sysupgrade"
+cp target/linux/armsr/base-files/lib/upgrade/platform.sh \
+	"$BOOTSTRAP_DIR/lib/upgrade/platform.sh"
+tar -C "$BOOTSTRAP_DIR" -czf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" \
+	etc/uci-defaults/97_hannspree-sysupgrade lib/upgrade/platform.sh
+tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
+	grep -qx 'etc/uci-defaults/97_hannspree-sysupgrade'
+tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
+	grep -qx 'lib/upgrade/platform.sh'
+rm -rf "$BOOTSTRAP_DIR"
 
 test "$("$FDTGET" "$STAGE/rk3288-firefly-reload.dtb" /usb@ff540000 status)" = okay
 "$FDTGET" -p "$STAGE/rk3288-firefly-reload.dtb" \
@@ -108,6 +149,10 @@ grep -Eq '(^|[[:space:]])country=EU($|[[:space:]])' "$STAGE/morse.modules.from-r
 dump_rootfs_file /etc/morse-persistent-vars/mm_region "$STAGE/mm_region.from-rootfs"
 grep -qx 'EU' "$STAGE/mm_region.from-rootfs"
 
+dump_rootfs_file /etc/uci-defaults/97_hannspree-sysupgrade \
+	"$STAGE/hannspree-sysupgrade-default.from-rootfs"
+grep -q "enforce_fw_sign='0'" "$STAGE/hannspree-sysupgrade-default.from-rootfs"
+
 dump_rootfs_file /usr/share/luci/menu.d/luci-app-ekhwizards.json \
 	"$STAGE/ekhwizards-menu.from-rootfs"
 grep -q '"admin/selectwizard"' "$STAGE/ekhwizards-menu.from-rootfs"
@@ -122,6 +167,7 @@ cmp target/linux/armsr/base-files/lib/upgrade/platform.sh \
 rm "$STAGE/installer.from-rootfs" \
 	"$STAGE/morse.modules.from-rootfs" \
 	"$STAGE/mm_region.from-rootfs" \
+	"$STAGE/hannspree-sysupgrade-default.from-rootfs" \
 	"$STAGE/ekhwizards-menu.from-rootfs" \
 	"$STAGE/bcf_mf15457.from-rootfs" \
 	"$STAGE/platform.sh.from-rootfs"
@@ -129,7 +175,7 @@ rm "$STAGE/installer.from-rootfs" \
 cd "$STAGE"
 sha256sum openwrt-hannspree-rk3288-mm8108-*.bin \
 	openwrt-hannspree-rk3288-mm8108-rootfs.ext4 \
-	"$SYSUPGRADE_NAME" hannspree-platform.sh \
+	"$SYSUPGRADE_NAME" hannspree-platform.sh hannspree-sysupgrade-bootstrap.tar.gz \
 	rk3288-firefly-reload.dtb boot.scr boot-emmc.scr > SHA256SUMS
 sha256sum -c SHA256SUMS
 : > INSTALL_TO_EMMC

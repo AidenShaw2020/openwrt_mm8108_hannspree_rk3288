@@ -41,13 +41,28 @@ the bootloader area, writes and verifies the root filesystem, installs the
 kernel, DTB and boot script, and supports the normal OpenWrt configuration
 backup.
 
+The custom image disables Morse Micro production-signature enforcement because
+the private production signing key is not available outside Morse Micro. The
+archive carries standard OpenWrt compatibility metadata, while the platform
+handler verifies the board, archive structure, declared sizes and SHA256 of
+every payload before writing anything to eMMC.
+
 Builds made before this sysupgrade handler was added need the included handler
 installed once before their first in-place upgrade:
+
+From LuCI, upload `hannspree-sysupgrade-bootstrap.tar.gz` under **System →
+Backup / Flash Firmware → Restore backup** and reboot. This small archive only
+installs the Hannspree upgrade handler and disables production-signature
+enforcement. Then upload the sysupgrade archive in the normal **Flash new
+firmware image** section.
+
+The equivalent SSH procedure is:
 
 ```sh
 scp hannspree-platform.sh root@DEVICE:/tmp/
 scp openwrt-hannspree-rk3288-mm8108-sysupgrade.tar root@DEVICE:/tmp/
-ssh root@DEVICE 'cp /tmp/hannspree-platform.sh /lib/upgrade/platform.sh && \
+ssh root@DEVICE 'uci set system.@system[0].enforce_fw_sign=0; \
+  uci commit system; cp /tmp/hannspree-platform.sh /lib/upgrade/platform.sh && \
   sysupgrade -T /tmp/openwrt-hannspree-rk3288-mm8108-sysupgrade.tar'
 ssh root@DEVICE 'sysupgrade /tmp/openwrt-hannspree-rk3288-mm8108-sysupgrade.tar'
 ```

@@ -39,6 +39,7 @@ $expectedNames = @(
     'openwrt-hannspree-rk3288-mm8108-rootfs.ext4',
     'openwrt-hannspree-rk3288-mm8108-sysupgrade.tar',
     'hannspree-platform.sh',
+    'hannspree-sysupgrade-bootstrap.tar.gz',
     'rk3288-firefly-reload.dtb', 'boot.scr', 'boot-emmc.scr'
 )
 $entries = @()
