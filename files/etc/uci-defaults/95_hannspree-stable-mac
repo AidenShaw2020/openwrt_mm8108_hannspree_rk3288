@@ -1,0 +1,55 @@
+#!/bin/sh
+# RK3288 falls back to a new random Ethernet MAC when no address is supplied by
+# firmware. Derive a stable, locally administered address from the unique eMMC
+# CID so each Hannspree box keeps one DHCP lease across clean installations.
+derive_mac() {
+	local cid="$1" hash
+
+	case "$cid" in
+		''|*[!0-9a-fA-F]*) return 1 ;;
+	esac
+
+	hash="$(printf '%s' "$cid" | sha256sum | awk '{print $1}')"
+	case "$hash" in
+		????????????????????????????????????????????????????????????????) ;;
+		*) return 1 ;;
+	esac
+
+	printf '02:%s:%s:%s:%s:%s\n' \
+		"$(printf '%s' "$hash" | cut -c1-2)" \
+		"$(printf '%s' "$hash" | cut -c3-4)" \
+		"$(printf '%s' "$hash" | cut -c5-6)" \
+		"$(printf '%s' "$hash" | cut -c7-8)" \
+		"$(printf '%s' "$hash" | cut -c9-10)"
+}
+
+if [ "${1:-}" = --derive ]; then
+	derive_mac "${2:-}"
+	exit $?
+fi
+
+cid=""
+for sysdev in /sys/class/block/mmcblk[0-9]; do
+	[ -e "$sysdev" ] || continue
+	[ "$(cat "$sysdev/device/type" 2>/dev/null)" = MMC ] || continue
+	[ -z "$cid" ] || exit 1
+	cid="$(cat "$sysdev/device/cid" 2>/dev/null)"
+done
+
+mac="$(derive_mac "$cid")" || exit 1
+
+uci -q batch <<EOF
+set network.hannspree_eth0='device'
+set network.hannspree_eth0.name='eth0'
+set network.hannspree_eth0.macaddr='$mac'
+set network.lan.macaddr='$mac'
+EOF
+
+for section in $(uci -q show network | sed -n 's/^network\.\([^=]*\)=device$/\1/p'); do
+	[ "$(uci -q get "network.$section.name")" = br-lan ] || continue
+	uci -q set "network.$section.macaddr=$mac"
+done
+
+uci -q commit network
+printf '%s\n' "$mac" > /etc/hannspree-ethernet-mac
+exit 0

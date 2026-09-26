@@ -15,6 +15,8 @@ OpenWrt commit `8ca817c95eab24b12de31b5cf8385e99ae6421cf` (3.1.1 release).
 - File-backed Morse persistent variables, the certified EU region and fixed random-key
   generation without the BusyBox `tr: Broken pipe` message.
 - Ethernet management access, Dropbear and HTTP enabled on first boot.
+- A stable per-device Ethernet MAC derived from the unique eMMC CID, preventing
+  a new DHCP address after each clean installation.
 - A guarded eMMC installer that verifies its inputs, backs up the first 32 MiB,
   writes only the existing first partition, verifies the write and preserves
   the bootloader.

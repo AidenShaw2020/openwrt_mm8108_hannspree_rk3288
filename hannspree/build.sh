@@ -115,13 +115,18 @@ rm -rf "$SYSUPGRADE_DIR"
 BOOTSTRAP_DIR="$STAGE/hannspree-sysupgrade-bootstrap"
 rm -rf "$BOOTSTRAP_DIR"
 mkdir -p "$BOOTSTRAP_DIR/etc/uci-defaults" "$BOOTSTRAP_DIR/lib/upgrade"
+cp files/etc/uci-defaults/95_hannspree-stable-mac \
+	"$BOOTSTRAP_DIR/etc/uci-defaults/95_hannspree-stable-mac"
 cp files/etc/uci-defaults/97_hannspree-sysupgrade \
 	"$BOOTSTRAP_DIR/etc/uci-defaults/97_hannspree-sysupgrade"
 cp target/linux/armsr/base-files/lib/upgrade/platform.sh \
 	"$BOOTSTRAP_DIR/lib/upgrade/platform.sh"
 tar --owner=0 --group=0 --numeric-owner -C "$BOOTSTRAP_DIR" \
 	-czf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" \
+	etc/uci-defaults/95_hannspree-stable-mac \
 	etc/uci-defaults/97_hannspree-sysupgrade lib/upgrade/platform.sh
+tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
+	grep -qx 'etc/uci-defaults/95_hannspree-stable-mac'
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
 	grep -qx 'etc/uci-defaults/97_hannspree-sysupgrade'
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
@@ -154,6 +159,14 @@ dump_rootfs_file /etc/uci-defaults/97_hannspree-sysupgrade \
 	"$STAGE/hannspree-sysupgrade-default.from-rootfs"
 grep -q "enforce_fw_sign='0'" "$STAGE/hannspree-sysupgrade-default.from-rootfs"
 
+dump_rootfs_file /etc/uci-defaults/95_hannspree-stable-mac \
+	"$STAGE/hannspree-stable-mac.from-rootfs"
+grep -q '/sys/class/block/mmcblk' "$STAGE/hannspree-stable-mac.from-rootfs"
+grep -q "set network.hannspree_eth0.macaddr='\$mac'" \
+	"$STAGE/hannspree-stable-mac.from-rootfs"
+test "$(sh "$STAGE/hannspree-stable-mac.from-rootfs" --derive \
+	15010038474d45345201e877feaf7457)" = 02:3c:98:b2:24:8b
+
 dump_rootfs_file /usr/share/luci/menu.d/luci-app-ekhwizards.json \
 	"$STAGE/ekhwizards-menu.from-rootfs"
 grep -q '"admin/selectwizard"' "$STAGE/ekhwizards-menu.from-rootfs"
@@ -169,6 +182,7 @@ rm "$STAGE/installer.from-rootfs" \
 	"$STAGE/morse.modules.from-rootfs" \
 	"$STAGE/mm_region.from-rootfs" \
 	"$STAGE/hannspree-sysupgrade-default.from-rootfs" \
+	"$STAGE/hannspree-stable-mac.from-rootfs" \
 	"$STAGE/ekhwizards-menu.from-rootfs" \
 	"$STAGE/bcf_mf15457.from-rootfs" \
 	"$STAGE/platform.sh.from-rootfs"
