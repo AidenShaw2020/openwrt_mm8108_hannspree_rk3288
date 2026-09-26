@@ -39,11 +39,11 @@ case "$operation" in
         if [ -r "$path" ]; then
             cat "$path"
         elif [ "$key" = mm_region ]; then
-            printf 'CZ\n'
+            printf 'EU\n'
         elif [ "$key" = default_wifi_key ]; then
             mkdir -p "$STORE"
             value=$(generate_wifi_key)
-            [ "${#value}" -eq 8 ] || value=MM8108CZ
+            [ "${#value}" -eq 8 ] || value=MM8108EU
             printf '%s\n' "$value" > "$path"
             cat "$path"
         fi

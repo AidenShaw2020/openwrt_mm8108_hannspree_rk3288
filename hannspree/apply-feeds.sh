@@ -20,6 +20,13 @@ cd "$TOPDIR"
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
+# Migrate the first Hannspree revision, which incorrectly used the ISO country
+# CZ even though the certified MM8108 BCF exposes the regional code EU.
+sed -i 's/MODPARAMS\.morse:=country=CZ/MODPARAMS.morse:=country=EU/' \
+	"$TOPDIR/feeds/morse/essentials/morse_driver/Makefile"
+sed -i 's/default_wifi_key=MM8108CZ/default_wifi_key=MM8108EU/' \
+	"$TOPDIR/feeds/morse/hardware/morse-bundle/files/morse/scripts/morse-wireless-defaults"
+
 apply_patch_once "$TOPDIR/feeds/morse" "$TOPDIR/hannspree/feeds/morse-feed.patch"
 apply_patch_once "$TOPDIR/feeds/packages" "$TOPDIR/hannspree/feeds/packages-feed.patch"
 

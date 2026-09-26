@@ -1,11 +1,166 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-RAMFS_COPY_BIN="/usr/sbin/blkid"
+RAMFS_COPY_BIN="/usr/sbin/blkid /usr/sbin/e2fsck /usr/sbin/resize2fs"
+
+is_hannspree_rk3288() {
+	case "$(board_name)" in
+		firefly,firefly-rk3288-reload|hannspree,s-x20) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+hannspree_find_emmc_partition() {
+	local sysdev name found=""
+
+	for sysdev in /sys/class/block/mmcblk[0-9]; do
+		[ -e "$sysdev" ] || continue
+		[ "$(cat "$sysdev/device/type" 2>/dev/null)" = MMC ] || continue
+		[ -z "$found" ] || {
+			v "More than one eMMC device found"
+			return 1
+		}
+		name="${sysdev##*/}"
+		found="/dev/${name}p1"
+	done
+
+	[ -n "$found" ] && [ -b "$found" ] || return 1
+	printf '%s\n' "$found"
+}
+
+hannspree_control_value() {
+	printf '%s\n' "$HANNSPREE_CONTROL" | awk -F= -v key="$1" '$1 == key { print substr($0, length(key) + 2); exit }'
+}
+
+hannspree_valid_hash() {
+	[ "${#1}" -eq 64 ] || return 1
+	case "$1" in
+		*[!0-9a-f]*) return 1 ;;
+	esac
+}
+
+hannspree_validate_sysupgrade() {
+	local image="$1" dir=sysupgrade-hannspree-rk3288 file hash key size
+
+	for file in CONTROL kernel root dtb boot.scr; do
+		tar tf "$image" "$dir/$file" >/dev/null 2>&1 || {
+			v "Hannspree sysupgrade is missing $file"
+			return 1
+		}
+	done
+
+	HANNSPREE_CONTROL="$(tar xOf "$image" "$dir/CONTROL")" || return 1
+	[ "$(hannspree_control_value FORMAT)" = 1 ] || return 1
+	[ "$(hannspree_control_value BOARD)" = firefly,firefly-rk3288-reload ] || return 1
+
+	size="$(hannspree_control_value ROOT_SIZE)"
+	case "$size" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$size" -gt 16777216 ] || return 1
+	[ "$(tar xOf "$image" "$dir/root" | wc -c)" -eq "$size" ] || return 1
+
+	for file in kernel root dtb boot.scr; do
+		case "$file" in
+			kernel) key=KERNEL_SHA256 ;;
+			root) key=ROOT_SHA256 ;;
+			dtb) key=DTB_SHA256 ;;
+			boot.scr) key=BOOT_SCR_SHA256 ;;
+		esac
+		hash="$(hannspree_control_value "$key")"
+		hannspree_valid_hash "$hash" || return 1
+		[ "$(tar xOf "$image" "$dir/$file" | /bin/busybox sha256sum | awk '{print $1}')" = "$hash" ] || {
+			v "Checksum failed for $file"
+			return 1
+		}
+	done
+}
+
+hannspree_do_upgrade() {
+	local image="$1" dir=sysupgrade-hannspree-rk3288 part disk sysdisk
+	local root_size root_hash part_size disk_size part_start actual rc mountpoint root_spec partuuid arg
+
+	hannspree_validate_sysupgrade "$image" || return 1
+	part="$(hannspree_find_emmc_partition)" || {
+		v "Unable to identify the Hannspree eMMC root partition"
+		return 1
+	}
+	disk="${part%p1}"
+	sysdisk="/sys/class/block/${disk##*/}"
+
+	disk_size=$(( $(cat "$sysdisk/size") * 512 ))
+	part_size=$(( $(cat "/sys/class/block/${part##*/}/size") * 512 ))
+	part_start=$(cat "/sys/class/block/${part##*/}/start")
+	root_size="$(hannspree_control_value ROOT_SIZE)"
+	root_hash="$(hannspree_control_value ROOT_SHA256)"
+	root_spec=""
+	for arg in $(cat /proc/cmdline); do
+		case "$arg" in root=*) root_spec="${arg#root=}" ;; esac
+	done
+	partuuid="$(blkid -s PARTUUID -o value "$part")"
+	case "$root_spec" in
+		"$part"|"PARTUUID=$partuuid") ;;
+		*)
+			v "Refusing to overwrite $part because it is not the active root partition"
+			return 1
+			;;
+	esac
+
+	[ "$disk_size" -gt 4000000000 ] && [ "$disk_size" -lt 16000000000 ] || {
+		v "Unexpected eMMC size: $disk_size"
+		return 1
+	}
+	[ "$part_start" -ge 32768 ] || {
+		v "Refusing to overwrite a partition that overlaps the bootloader area"
+		return 1
+	}
+	[ "$root_size" -lt "$part_size" ] || {
+		v "The new root filesystem does not fit in $part"
+		return 1
+	}
+
+	v "Writing verified Hannspree root filesystem to $part"
+	tar xOf "$image" "$dir/root" | dd of="$part" bs=4M conv=fsync || return 1
+	sync
+	actual=$(/bin/busybox head -c "$root_size" "$part" | /bin/busybox sha256sum | awk '{print $1}')
+	[ "$actual" = "$root_hash" ] || {
+		v "Root filesystem verification failed after writing"
+		return 1
+	}
+
+	rc=0
+	e2fsck -fy "$part" || rc=$?
+	[ "$rc" -le 1 ] || return 1
+	resize2fs "$part" || return 1
+
+	mountpoint=/mnt/hannspree-upgrade
+	mkdir -p "$mountpoint"
+	mount -t ext4 -o rw,noatime "$part" "$mountpoint" || return 1
+	mkdir -p "$mountpoint/boot" "$mountpoint/etc"
+	tar xOf "$image" "$dir/kernel" > "$mountpoint/boot/openwrt-kernel.bin" || return 1
+	tar xOf "$image" "$dir/dtb" > "$mountpoint/boot/rk3288-firefly-reload.dtb" || return 1
+	tar xOf "$image" "$dir/boot.scr" > "$mountpoint/boot/boot.scr" || return 1
+	cp "$mountpoint/boot/boot.scr" "$mountpoint/boot.scr" || return 1
+
+	[ "$(/bin/busybox sha256sum "$mountpoint/boot/openwrt-kernel.bin" | awk '{print $1}')" = \
+		"$(hannspree_control_value KERNEL_SHA256)" ] || return 1
+	[ "$(/bin/busybox sha256sum "$mountpoint/boot/rk3288-firefly-reload.dtb" | awk '{print $1}')" = \
+		"$(hannspree_control_value DTB_SHA256)" ] || return 1
+	[ "$(/bin/busybox sha256sum "$mountpoint/boot/boot.scr" | awk '{print $1}')" = \
+		"$(hannspree_control_value BOOT_SCR_SHA256)" ] || return 1
+
+	printf 'sysupgraded %s\n' "$(date 2>/dev/null || true)" > "$mountpoint/etc/hannspree-emmc-installed"
+	sync
+	umount "$mountpoint" || return 1
+	HANNSPREE_EMMCPART="$part"
+}
 
 platform_check_image() {
 	local board=$(board_name)
 	local diskdev partdev diff
 	[ "$#" -gt 1 ] && return 1
+
+	if is_hannspree_rk3288; then
+		hannspree_validate_sysupgrade "$1"
+		return $?
+	fi
 
 	v "Board is ${board}"
 
@@ -35,6 +190,19 @@ platform_check_image() {
 
 platform_copy_config() {
 	local partdev parttype=ext4
+
+	if is_hannspree_rk3288; then
+		partdev="${HANNSPREE_EMMCPART:-$(hannspree_find_emmc_partition)}" || return 1
+		mkdir -p /mnt
+		mount -t ext4 -o rw,noatime "$partdev" /mnt || return 1
+		cp -af "$UPGRADE_BACKUP" "/mnt/$BACKUP_FILE" || {
+			umount /mnt
+			return 1
+		}
+		sync
+		umount /mnt
+		return 0
+	fi
 
 	if export_partdevice partdev 1; then
 		part_magic_fat "/dev/$partdev" && parttype=vfat
@@ -89,6 +257,11 @@ platform_do_upgrade_efi_system_partition() {
 platform_do_upgrade() {
 	local board=$(board_name)
 	local diskdev partdev diff
+
+	if is_hannspree_rk3288; then
+		hannspree_do_upgrade "$1"
+		return $?
+	fi
 
 	export_bootdevice && export_partdevice diskdev 0 || {
 		v "platform_do_upgrade: Unable to determine upgrade device"

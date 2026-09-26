@@ -12,7 +12,7 @@ OpenWrt commit `8ca817c95eab24b12de31b5cf8385e99ae6421cf` (3.1.1 release).
   210 ms after this regulator was disabled.
 - USB autosuspend disabled in both installer and persistent eMMC boot scripts.
 - Repetitive DesignWare MMC bus-speed messages moved from info to debug level.
-- File-backed Morse persistent variables, CZ defaults and fixed random-key
+- File-backed Morse persistent variables, the certified EU region and fixed random-key
   generation without the BusyBox `tr: Broken pipe` message.
 - Ethernet management access, Dropbear and HTTP enabled on first boot.
 - A guarded eMMC installer that verifies its inputs, backs up the first 32 MiB,
@@ -33,6 +33,29 @@ root:
 The verified installation set is written to
 `bin/targets/armsr/armv7/hannspree-mm8108/`.
 
+The directory also contains
+`openwrt-hannspree-rk3288-mm8108-sysupgrade.tar`. This is a guarded upgrade
+archive for the Hannspree single-partition eMMC layout. It verifies every
+payload, checks that the target is the active 4-16 GB eMMC partition, preserves
+the bootloader area, writes and verifies the root filesystem, installs the
+kernel, DTB and boot script, and supports the normal OpenWrt configuration
+backup.
+
+Builds made before this sysupgrade handler was added need the included handler
+installed once before their first in-place upgrade:
+
+```sh
+scp hannspree-platform.sh root@DEVICE:/tmp/
+scp openwrt-hannspree-rk3288-mm8108-sysupgrade.tar root@DEVICE:/tmp/
+ssh root@DEVICE 'cp /tmp/hannspree-platform.sh /lib/upgrade/platform.sh && \
+  sysupgrade -T /tmp/openwrt-hannspree-rk3288-mm8108-sysupgrade.tar'
+ssh root@DEVICE 'sysupgrade /tmp/openwrt-hannspree-rk3288-mm8108-sysupgrade.tar'
+```
+
+After this release, subsequent builds already contain the handler and only the
+last `sysupgrade` command is needed. Use `sysupgrade -n` when configuration
+must not be retained.
+
 ## Build remotely and prepare an SD card from Windows
 
 Clone this branch into the configured build directory on `aiden-ubuntu`. Insert
@@ -47,7 +70,8 @@ Pass `-KeyFile C:\path\to\key` when the SSH key is not stored as
 
 The PowerShell script builds on the remote host, downloads only the verified
 artifacts, checks SHA256 before and after copying, backs up existing SD files,
-and creates the one-shot `INSTALL_TO_EMMC` marker.
+and creates the one-shot `INSTALL_TO_EMMC` marker. It also downloads the
+verified sysupgrade archive and one-time handler described above.
 
 Booting that SD card replaces the existing first eMMC partition. The installer
 identifies SD and eMMC from sysfs, refuses unexpected layouts and preserves the

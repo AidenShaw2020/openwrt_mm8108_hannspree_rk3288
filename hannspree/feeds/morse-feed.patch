@@ -13,7 +13,7 @@ index 865ba2e..8c4a5fe 100644
      $(PKG_BUILD_DIR)/dot11ah/dot11ah.ko
    AUTOLOAD:=$(call AutoProbe,morse)
 -  MODPARAMS.morse:=country=US
-+  MODPARAMS.morse:=country=CZ
++  MODPARAMS.morse:=country=EU
    PROVIDES:=kmod-morse
  endef
  
@@ -29,7 +29,7 @@ index 360c083..f7acd6b 100755
 +	# Consume a fixed-size random block before filtering. The old tr|head
 +	# pipeline made tr report SIGPIPE as "Broken pipe" on BusyBox.
 +	default_wifi_key=$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n\r\t' | cut -c1-8)
-+	[ "${#default_wifi_key}" -eq 8 ] || default_wifi_key=MM8108CZ
++	[ "${#default_wifi_key}" -eq 8 ] || default_wifi_key=MM8108EU
  fi
  uci set "system.@system[0].default_wifi_key=$default_wifi_key"
  mm_region="$(persistent_vars_storage.sh READ mm_region)"
