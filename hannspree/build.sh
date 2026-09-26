@@ -119,7 +119,8 @@ cp files/etc/uci-defaults/97_hannspree-sysupgrade \
 	"$BOOTSTRAP_DIR/etc/uci-defaults/97_hannspree-sysupgrade"
 cp target/linux/armsr/base-files/lib/upgrade/platform.sh \
 	"$BOOTSTRAP_DIR/lib/upgrade/platform.sh"
-tar -C "$BOOTSTRAP_DIR" -czf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" \
+tar --owner=0 --group=0 --numeric-owner -C "$BOOTSTRAP_DIR" \
+	-czf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" \
 	etc/uci-defaults/97_hannspree-sysupgrade lib/upgrade/platform.sh
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
 	grep -qx 'etc/uci-defaults/97_hannspree-sysupgrade'
