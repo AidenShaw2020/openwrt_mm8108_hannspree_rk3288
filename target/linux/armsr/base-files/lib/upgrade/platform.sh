@@ -209,10 +209,22 @@ platform_copy_config() {
 		partdev="${HANNSPREE_EMMCPART:-$(hannspree_find_emmc_partition)}" || return 1
 		mkdir -p /mnt
 		mount -t ext4 -o rw,noatime "$partdev" /mnt || return 1
-		cp -af "$UPGRADE_BACKUP" "/mnt/$BACKUP_FILE" || {
+		[ -s "$UPGRADE_BACKUP" ] || {
+			v "Upgrade backup is missing or empty"
 			umount /mnt
 			return 1
 		}
+		/bin/busybox tar -tzf "$UPGRADE_BACKUP" >/dev/null || {
+			v "Upgrade backup is not a valid tar archive"
+			umount /mnt
+			return 1
+		}
+		v "Restoring configuration directly into the new Hannspree root filesystem"
+		/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C /mnt || {
+			umount /mnt
+			return 1
+		}
+		rm -f "/mnt/$BACKUP_FILE"
 		sync
 		umount /mnt
 		return 0

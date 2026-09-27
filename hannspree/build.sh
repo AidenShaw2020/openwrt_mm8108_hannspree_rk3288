@@ -177,6 +177,10 @@ dump_rootfs_file /lib/firmware/morse/bcf_mf15457.bin "$STAGE/bcf_mf15457.from-ro
 dump_rootfs_file /lib/upgrade/platform.sh "$STAGE/platform.sh.from-rootfs"
 cmp target/linux/armsr/base-files/lib/upgrade/platform.sh \
 	"$STAGE/platform.sh.from-rootfs"
+grep -q 'Restoring configuration directly into the new Hannspree root filesystem' \
+	"$STAGE/platform.sh.from-rootfs"
+grep -q '/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C /mnt' \
+	"$STAGE/platform.sh.from-rootfs"
 
 rm "$STAGE/installer.from-rootfs" \
 	"$STAGE/morse.modules.from-rootfs" \
