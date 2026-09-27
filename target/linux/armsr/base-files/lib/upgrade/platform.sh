@@ -87,6 +87,29 @@ hannspree_validate_payloads() {
 	done
 }
 
+hannspree_restore_config() {
+	local mountpoint="$1" backup_hash backup_count
+
+	[ -n "$UPGRADE_BACKUP" ] || return 0
+	[ -s "$UPGRADE_BACKUP" ] || {
+		v "Hannspree configuration backup is missing or empty"
+		return 1
+	}
+	/bin/busybox tar -tzf "$UPGRADE_BACKUP" >/dev/null || {
+		v "Hannspree configuration backup is not a valid tar archive"
+		return 1
+	}
+
+	backup_hash="$(/bin/busybox sha256sum "$UPGRADE_BACKUP" | awk '{print $1}')"
+	backup_count="$(/bin/busybox tar -tzf "$UPGRADE_BACKUP" | wc -l)"
+	v "Restoring $backup_count configuration entries into the new Hannspree root filesystem"
+	/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C "$mountpoint" || return 1
+	cp -f "$UPGRADE_BACKUP" "$mountpoint/$BACKUP_FILE" || return 1
+	mkdir -p "$mountpoint/etc"
+	printf 'sha256=%s\nentries=%s\n' "$backup_hash" "$backup_count" > \
+		"$mountpoint/etc/hannspree-config-restored"
+}
+
 hannspree_do_upgrade() {
 	local image="$1" dir=sysupgrade-hannspree-rk3288 part disk sysdisk
 	local root_size root_hash part_size disk_size part_start actual rc mountpoint root_spec partuuid arg
@@ -148,6 +171,10 @@ hannspree_do_upgrade() {
 	mkdir -p "$mountpoint"
 	mount -t ext4 -o rw,noatime "$part" "$mountpoint" || return 1
 	mkdir -p "$mountpoint/boot" "$mountpoint/etc"
+	hannspree_restore_config "$mountpoint" || {
+		umount "$mountpoint"
+		return 1
+	}
 	tar xOf "$image" "$dir/kernel" > "$mountpoint/boot/openwrt-kernel.bin" || return 1
 	tar xOf "$image" "$dir/dtb" > "$mountpoint/boot/rk3288-firefly-reload.dtb" || return 1
 	tar xOf "$image" "$dir/boot.scr" > "$mountpoint/boot/boot.scr" || return 1
@@ -209,22 +236,10 @@ platform_copy_config() {
 		partdev="${HANNSPREE_EMMCPART:-$(hannspree_find_emmc_partition)}" || return 1
 		mkdir -p /mnt
 		mount -t ext4 -o rw,noatime "$partdev" /mnt || return 1
-		[ -s "$UPGRADE_BACKUP" ] || {
-			v "Upgrade backup is missing or empty"
+		hannspree_restore_config /mnt || {
 			umount /mnt
 			return 1
 		}
-		/bin/busybox tar -tzf "$UPGRADE_BACKUP" >/dev/null || {
-			v "Upgrade backup is not a valid tar archive"
-			umount /mnt
-			return 1
-		}
-		v "Restoring configuration directly into the new Hannspree root filesystem"
-		/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C /mnt || {
-			umount /mnt
-			return 1
-		}
-		rm -f "/mnt/$BACKUP_FILE"
 		sync
 		umount /mnt
 		return 0
