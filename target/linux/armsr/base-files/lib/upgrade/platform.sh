@@ -88,7 +88,7 @@ hannspree_validate_payloads() {
 }
 
 hannspree_restore_config() {
-	local mountpoint="$1" backup_hash backup_count
+	local mountpoint="$1" backup_hash backup_count verifydir file name config_count
 
 	[ -n "$UPGRADE_BACKUP" ] || return 0
 	[ -s "$UPGRADE_BACKUP" ] || {
@@ -104,9 +104,40 @@ hannspree_restore_config() {
 	backup_count="$(/bin/busybox tar -tzf "$UPGRADE_BACKUP" | wc -l)"
 	v "Restoring $backup_count configuration entries into the new Hannspree root filesystem"
 	/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C "$mountpoint" || return 1
+
+	# Verify every UCI file from an independent extraction before allowing the
+	# upgrade to reboot. The Hannspree keep.d entry guarantees that /etc/config
+	# is present even for dynamically generated Morse package configuration.
+	verifydir="/tmp/hannspree-config-verify.$$"
+	rm -rf "$verifydir"
+	mkdir -p "$verifydir" || return 1
+	/bin/busybox tar -xzf "$UPGRADE_BACKUP" -C "$verifydir" || {
+		rm -rf "$verifydir"
+		return 1
+	}
+	config_count=0
+	for file in "$verifydir"/etc/config/*; do
+		[ -f "$file" ] || continue
+		name="${file##*/}"
+		[ -f "$mountpoint/etc/config/$name" ] && \
+			/bin/busybox cmp -s "$file" "$mountpoint/etc/config/$name" || {
+			v "Hannspree configuration verification failed for /etc/config/$name"
+			rm -rf "$verifydir"
+			return 1
+		}
+		config_count=$((config_count + 1))
+	done
+	rm -rf "$verifydir"
+	[ "$config_count" -gt 0 ] || {
+		v "Hannspree backup contains no /etc/config files; refusing to reboot"
+		return 1
+	}
+	v "Verified $config_count restored UCI configuration files"
+
 	cp -f "$UPGRADE_BACKUP" "$mountpoint/$BACKUP_FILE" || return 1
 	mkdir -p "$mountpoint/etc"
-	printf 'sha256=%s\nentries=%s\n' "$backup_hash" "$backup_count" > \
+	printf 'sha256=%s\nentries=%s\nconfig_files=%s\n' \
+		"$backup_hash" "$backup_count" "$config_count" > \
 		"$mountpoint/etc/hannspree-config-restored"
 }
 

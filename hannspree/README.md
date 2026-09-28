@@ -54,9 +54,19 @@ installed once before their first in-place upgrade:
 
 From LuCI, upload `hannspree-sysupgrade-bootstrap.tar.gz` under **System →
 Backup / Flash Firmware → Restore backup** and reboot. This small archive only
-installs the Hannspree upgrade handler and disables production-signature
-enforcement. Then upload the sysupgrade archive in the normal **Flash new
-firmware image** section.
+installs the Hannspree upgrade handler, the rule that preserves every file in
+`/etc/config`, and disables production-signature enforcement. Before the first
+upgrade to a release containing the verified all-configuration restore, install
+the matching bootstrap archive and reboot. You can confirm that the running
+system includes the rule with:
+
+```sh
+sysupgrade -l | grep '^/etc/config/' | head
+```
+
+Then upload the sysupgrade archive in the normal **Flash new firmware image**
+section. The handler independently extracts the backup, compares every restored
+UCI file, and refuses to reboot if the comparison fails.
 
 The equivalent SSH procedure is:
 

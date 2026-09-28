@@ -114,23 +114,29 @@ rm -rf "$SYSUPGRADE_DIR"
 
 BOOTSTRAP_DIR="$STAGE/hannspree-sysupgrade-bootstrap"
 rm -rf "$BOOTSTRAP_DIR"
-mkdir -p "$BOOTSTRAP_DIR/etc/uci-defaults" "$BOOTSTRAP_DIR/lib/upgrade"
+mkdir -p "$BOOTSTRAP_DIR/etc/uci-defaults" \
+	"$BOOTSTRAP_DIR/lib/upgrade/keep.d"
 cp files/etc/uci-defaults/95_hannspree-stable-mac \
 	"$BOOTSTRAP_DIR/etc/uci-defaults/95_hannspree-stable-mac"
 cp files/etc/uci-defaults/97_hannspree-sysupgrade \
 	"$BOOTSTRAP_DIR/etc/uci-defaults/97_hannspree-sysupgrade"
 cp target/linux/armsr/base-files/lib/upgrade/platform.sh \
 	"$BOOTSTRAP_DIR/lib/upgrade/platform.sh"
+cp files/lib/upgrade/keep.d/hannspree-config \
+	"$BOOTSTRAP_DIR/lib/upgrade/keep.d/hannspree-config"
 tar --owner=0 --group=0 --numeric-owner -C "$BOOTSTRAP_DIR" \
 	-czf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" \
 	etc/uci-defaults/95_hannspree-stable-mac \
-	etc/uci-defaults/97_hannspree-sysupgrade lib/upgrade/platform.sh
+	etc/uci-defaults/97_hannspree-sysupgrade \
+	lib/upgrade/platform.sh lib/upgrade/keep.d/hannspree-config
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
 	grep -qx 'etc/uci-defaults/95_hannspree-stable-mac'
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
 	grep -qx 'etc/uci-defaults/97_hannspree-sysupgrade'
 tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
 	grep -qx 'lib/upgrade/platform.sh'
+tar tzf "$STAGE/hannspree-sysupgrade-bootstrap.tar.gz" | \
+	grep -qx 'lib/upgrade/keep.d/hannspree-config'
 rm -rf "$BOOTSTRAP_DIR"
 
 test "$("$FDTGET" "$STAGE/rk3288-firefly-reload.dtb" /usb@ff540000 status)" = okay

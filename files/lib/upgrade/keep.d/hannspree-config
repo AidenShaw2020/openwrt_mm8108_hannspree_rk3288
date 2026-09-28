@@ -1,0 +1,4 @@
+# Preserve every UCI configuration file on Hannspree sysupgrade. Some Morse
+# packages generate their configuration dynamically and do not declare every
+# file as an opkg conffile.
+/etc/config/
